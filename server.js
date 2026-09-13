@@ -383,9 +383,18 @@ async function startBot() {
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
+    const { connection, lastDisconnect, qr } = update;
+
+    // ★ QR event = socket is ready for pairing
+    if (qr && socketReadyResolve) {
+      socketReady = true;
+      console.log('[BOT] QR received — socket ready for pairing code');
+      socketReadyResolve.resolve();
+      socketReadyResolve = null;
+    }
 
     if (connection === 'close') {
+      socketReady = false; // Reset on close
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       console.log(`[BOT] Connection closed (${statusCode}). Reconnect: ${shouldReconnect}`);
@@ -399,6 +408,11 @@ async function startBot() {
         connectionState = { connected: false, user: null };
       }
     } else if (connection === 'open') {
+      socketReady = true;
+      if (socketReadyResolve) {
+        socketReadyResolve.resolve();
+        socketReadyResolve = null;
+      }
       const user = sock.user;
       connectionState = {
         connected: true,
@@ -579,14 +593,37 @@ _Send text OR voice notes!_`,
 
 // ============ PAIRING CODE ============
 
+// Wait for socket to be ready (QR event = socket is open + ready)
+let socketReady = false;
+let socketReadyResolve = null;
+
+function waitForSocketReady() {
+  return new Promise((resolve, reject) => {
+    if (socketReady) {
+      resolve();
+      return;
+    }
+    socketReadyResolve = { resolve, reject };
+    // Timeout after 45 seconds
+    setTimeout(() => {
+      if (socketReadyResolve) {
+        socketReadyResolve.reject(new Error('Socket not ready after 45s. WhatsApp may be blocking the connection.'));
+        socketReadyResolve = null;
+      }
+    }, 45000);
+  });
+}
+
 async function getPairingCode(phoneNumber) {
   if (!sock) throw new Error('Bot not initialized');
-  let waited = 0;
-  while (!sock.wsReady && waited < 30) {
-    await new Promise(r => setTimeout(r, 1000));
-    waited++;
-  }
-  return await sock.requestPairingCode(phoneNumber);
+
+  // Wait for socket to be truly ready (QR event fires when socket is open)
+  await waitForSocketReady();
+
+  console.log(`[PAIR] Socket ready — requesting pairing code for ${phoneNumber}`);
+  const code = await sock.requestPairingCode(phoneNumber);
+  console.log(`[PAIR] Got code: ${code}`);
+  return code;
 }
 
 // ============ API ENDPOINTS ============
@@ -624,7 +661,21 @@ app.post('/api/pair', async (req, res) => {
     if (connectionState.connected) {
       return res.status(409).json({ error: 'Already paired. Bot is connected.' });
     }
-    const code = await getPairingCode(phoneNumber);
+
+    console.log(`[PAIR] Requesting pairing code for ${phoneNumber}...`);
+
+    // Set a hard timeout for the entire pairing operation
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Pairing timed out. Please try again in 30 seconds.')), 50000)
+    );
+
+    const code = await Promise.race([
+      getPairingCode(phoneNumber),
+      timeoutPromise,
+    ]);
+
+    console.log(`[PAIR] ✓ Code generated: ${code}`);
+
     res.json({
       success: true, code, phoneNumber, expiresIn: 90,
       instructions: [
@@ -635,8 +686,17 @@ app.post('/api/pair', async (req, res) => {
       ],
     });
   } catch (e) {
-    console.error('[PAIR ERROR]', e);
-    res.status(500).json({ error: e.message });
+    console.error('[PAIR ERROR]', e.message);
+    // Reset the socket ready state so next attempt can retry
+    socketReady = false;
+    // Try to restart the bot socket
+    try { if (sock) sock.ev.removeAllListeners(); } catch {}
+    setTimeout(() => startBot().catch(() => {}), 2000);
+
+    res.status(500).json({
+      error: e.message || 'Failed to generate pairing code. Please try again.',
+      hint: 'The bot is reconnecting to WhatsApp. Wait 10 seconds and try again.',
+    });
   }
 });
 
