@@ -135,8 +135,8 @@ function isOwner(phoneNumber) {
   return num === OWNER_PHONE || num.slice(-9) === OWNER_PHONE.slice(-9);
 }
 
-// ★ Bot state
-let botActive = false;
+// ★ Bot state — ACTIVE by default (no .active command needed)
+let botActive = true;
 let sock = null;
 let connectionState = { connected: false, user: null };
 
@@ -504,23 +504,6 @@ async function startBot() {
 
       if (!text && !isVoiceNote) continue;
 
-      // === .active command (OWNER ONLY) ===
-      if (text.toLowerCase().trim() === '.active') {
-        if (!isOwner(senderNum)) continue;
-        botActive = !botActive;
-        try {
-          await sock.sendPresenceUpdate('composing', msg.key.remoteJid);
-          await new Promise(r => setTimeout(r, 800));
-          await sock.sendMessage(msg.key.remoteJid, {
-            text: botActive
-              ? `🟢 *AUTO-REPLY ACTIVATED*\n\nHey! ${OWNER_NAME} here. ${OWNER_STATUS}\n\nI'll be replying to messages now — text or voice! 😊🎤`
-              : `🔴 *AUTO-REPLY DEACTIVATED*\n\n${OWNER_NAME} is going offline now. Catch you later! 👋`,
-          }, { quoted: msg });
-          await sock.sendPresenceUpdate('paused', msg.key.remoteJid);
-        } catch (e) {}
-        continue;
-      }
-
       // === .menu command (OWNER ONLY) ===
       if (text.toLowerCase().trim() === '.menu') {
         if (!isOwner(senderNum)) continue;
@@ -536,13 +519,11 @@ async function startBot() {
 🎤 *Voice:* ON (listens + replies with voice)
 👤 *Owner:* ${OWNER_NAME}
 📚 *Status:* ${OWNER_STATUS}
-🟢 *Bot:* ${botActive ? 'ACTIVE' : 'OFF'}
-
+🟢 *Bot:* ACTIVE (always on)
 📝 *Commands:*
-  .active → Toggle auto-reply
-  .menu   → Show this menu
+  .menu → Show this menu
 
-_Send text OR voice notes!_`,
+_Bot is always active — no need to activate!_`,
           }, { quoted: msg });
           await sock.sendPresenceUpdate('paused', msg.key.remoteJid);
         } catch (e) {}
