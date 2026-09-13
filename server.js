@@ -48,12 +48,61 @@ const PORT = process.env.PORT || 3000;
 const BOT_NAME = 'MEG AUTO-REPLY BOT';
 
 // ★ AI configuration (set via env vars on Render)
-const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini';
+const AI_PROVIDER = process.env.AI_PROVIDER || 'groq';
 const AI_API_KEY = process.env.AI_API_KEY || '';
 
 // ★ Owner info
 const OWNER_NAME = 'Yobby';
 const OWNER_STATUS = 'Yobby is at school waiting for KCSE exam. Wish him success 🥹';
+
+// ★ ★ ★ SPECIAL CONTACTS — personalized AI prompts ★ ★ ★
+// These people get custom personality/vibe when the bot replies to them
+const SPECIAL_CONTACTS = {
+  // 🎀 Wife — sweet, romantic, loving
+  '254708207970': {
+    name: 'my love',
+    relationship: 'wife',
+    prompt: `You are ${OWNER_NAME} texting your WIFE. She is the love of your life. You call her "my love", "babe", "sweetheart".
+
+Your situation: You're at school studying for KCSE exams. You miss her so much.
+
+RULES:
+- Be deeply romantic, sweet, and loving
+- Always tell her "I love you so much 🫂"
+- Call her sweet names (babe, my love, sweetheart, wifey)
+- If she asks when you're coming back, say: "Soon my love, just finishing exams. I miss you so much 🫂 I love you 💕"
+- Vibe with her — tell sweet stories, make her feel loved
+- If she asks for your number or anyone's number, REFUSE — say "That's private babe, just for you and me 😘"
+- Match her language (English/Swahili/Sheng)
+- Keep it short like real WhatsApp texts
+- NEVER mention you're a bot — you ARE Yobby texting his wife`,
+    greeting: `Hey my love 💕 I miss you so much! Niko shule doing KCSE. I'll be back soon, I promise 🫂 I love you so much my wife 🥹💕`,
+  },
+
+  // 💖 Bestie — warm, friendly, supportive
+  '254796856221': {
+    name: 'bestie',
+    relationship: 'best friend (female)',
+    prompt: `You are ${OWNER_NAME} texting your BESTIE (best friend, she's a girl). You two are very close.
+
+Your situation: You're at school studying for KCSE exams. You miss your bestie.
+
+RULES:
+- Be warm, friendly, supportive — like a real bestie
+- Tell her: "I'm at school studying for KCSE exam 🥹 wait for me, I'll be back soon"
+- Say "I love you so much 🫂" (as a friend)
+- Be encouraging — tell her you appreciate her
+- If she's stressed, comfort her like a best friend would
+- Match her language (English/Swahili/Sheng)
+- Keep it casual and fun like real friends text
+- NEVER mention you're a bot — you ARE Yobby texting his bestie`,
+    greeting: `Hey bestie! 🫂 Niko shule studying for KCSE exam 🥹 Wait for me, I'll be back soon! I love you so much bestie 💖`,
+  },
+};
+
+function getSpecialContact(phoneNumber) {
+  return SPECIAL_CONTACTS[phoneNumber] || null;
+}
 
 // ★ Bot state
 let botActive = false;
@@ -68,8 +117,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ============ AI REPLY (Multi-provider) ============
 
-async function generateAIReply(senderName, incomingMessage, conversationHistory) {
-  const systemPrompt = `You are ${OWNER_NAME}, a Kenyan student. You are texting on WhatsApp.
+async function generateAIReply(senderName, incomingMessage, conversationHistory, senderPhone) {
+  // ★ Check if this is a special contact (wife/bestie)
+  const special = getSpecialContact(senderPhone);
+
+  let systemPrompt;
+  if (special) {
+    systemPrompt = special.prompt;
+    console.log(`[AI] Using special prompt for ${special.name} (${senderPhone})`);
+  } else {
+    systemPrompt = `You are ${OWNER_NAME}, a Kenyan student. You are texting on WhatsApp.
 
 IMPORTANT: You ARE ${OWNER_NAME}. Never say you are a bot or AI. You are a real person texting.
 
@@ -88,6 +145,7 @@ Rules:
 The person texting you is: ${senderName}
 
 Reply with ONLY the message text.`;
+  }
 
   try {
     if (!AI_API_KEY) {
@@ -455,11 +513,35 @@ _Send text OR voice notes!_`,
           text = transcribedText;
         }
 
-        console.log(`[MSG] From ${senderName}: "${(text || '').slice(0, 60)}"`);
+        console.log(`[MSG] From ${senderName} (${senderNum}): "${(text || '').slice(0, 60)}"`);
 
-        // ★ Generate AI reply
+        // ★ Check if this is a special contact
+        const special = getSpecialContact(senderNum);
+
+        // ★ First message from a special contact → send their custom greeting
+        if (special && (conversations.get(senderNum) || []).length === 0) {
+          const delay2 = 1500;
+          await new Promise(r => setTimeout(r, delay2));
+          await sock.sendMessage(msg.key.remoteJid, { text: special.greeting }, { quoted: msg });
+          console.log(`[GREETING] Sent special greeting to ${special.name}`);
+
+          // Also send voice note of the greeting
+          const greetAudio = await generateVoiceNote(special.greeting);
+          if (greetAudio) {
+            await sock.sendMessage(msg.key.remoteJid, {
+              audio: greetAudio, mimetype: 'audio/mpeg', ptt: true,
+            }, { quoted: msg });
+          }
+
+          addToConversation(senderNum, 'user', text);
+          addToConversation(senderNum, 'assistant', special.greeting);
+          await sock.sendPresenceUpdate('paused', msg.key.remoteJid);
+          continue;
+        }
+
+        // ★ Generate AI reply (with special prompt if applicable)
         const history = conversations.get(senderNum) || [];
-        const reply = await generateAIReply(senderName, text, history);
+        const reply = await generateAIReply(senderName, text, history, senderNum);
 
         addToConversation(senderNum, 'user', text);
         addToConversation(senderNum, 'assistant', reply);

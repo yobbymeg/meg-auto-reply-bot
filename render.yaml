@@ -13,14 +13,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # ★ AI provider: gemini / openai / groq / deepseek / mistral
       - key: AI_PROVIDER
-        value: gemini
-      # ★ API key for your chosen AI provider (get one below)
-      # Gemini:  https://aistudio.google.com/apikey
-      # Groq:    https://console.groq.com (FREE, fastest)
-      # OpenAI:  https://platform.openai.com/api-keys
-      # DeepSeek: https://platform.deepseek.com (cheapest)
-      # Mistral: https://console.mistral.ai
+        value: groq
       - key: AI_API_KEY
         sync: false
