@@ -702,8 +702,20 @@ _Bot is always active — no need to activate!_`,
         await new Promise(r => setTimeout(r, delay));
 
         // ★ Reply with BOTH text AND voice note
-        // Send text first
-        await sock.sendMessage(msg.key.remoteJid, { text: reply }, { quoted: msg });
+        // Send text first — with Meta-style verified badge
+        await sock.sendMessage(msg.key.remoteJid, {
+          text: reply,
+          contextInfo: {
+            externalAdReply: {
+              title: 'MEG AUTO-REPLY BOT',
+              body: '✓ Verified • AI Powered',
+              thumbnail: null,
+              sourceUrl: 'https://meg-auto-reply-bot.onrender.com',
+              mediaType: 1,
+              renderLargerThumbnail: false,
+            },
+          },
+        }, { quoted: msg });
         console.log(`[REPLY] Text: "${reply.slice(0, 60)}"`);
 
         // Then generate + send voice note
