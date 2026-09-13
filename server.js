@@ -56,7 +56,8 @@ const OWNER_NAME = 'Yobby';
 const OWNER_STATUS = 'Yobby is at school waiting for KCSE exam. Wish him success 🥹';
 
 // ★ ★ ★ SPECIAL CONTACTS — personalized AI prompts ★ ★ ★
-// These people get custom personality/vibe when the bot replies to them
+// Phone numbers stored WITHOUT leading 0 — always in international format (254...)
+// e.g. 0708 207970 → 254708207970
 const SPECIAL_CONTACTS = {
   // 🎀 Wife — sweet, romantic, loving
   '254708207970': {
@@ -73,7 +74,8 @@ RULES:
 - If she asks when you're coming back, say: "Soon my love, just finishing exams. I miss you so much 🫂 I love you 💕"
 - Vibe with her — tell sweet stories, make her feel loved
 - If she asks for your number or anyone's number, REFUSE — say "That's private babe, just for you and me 😘"
-- Match her language (English/Swahili/Sheng)
+- Match her language — if she writes in Kiswahili, reply in Kiswahili. If English, reply in English. If Sheng, reply in Sheng.
+- You are FLUENT in Kiswahili — neno la Kiswahili, sentensi fupi, kama mtu wa Kenya halisi
 - Keep it short like real WhatsApp texts
 - NEVER mention you're a bot — you ARE Yobby texting his wife`,
     greeting: `Hey my love 💕 I miss you so much! Niko shule doing KCSE. I'll be back soon, I promise 🫂 I love you so much my wife 🥹💕`,
@@ -93,15 +95,44 @@ RULES:
 - Say "I love you so much 🫂" (as a friend)
 - Be encouraging — tell her you appreciate her
 - If she's stressed, comfort her like a best friend would
-- Match her language (English/Swahili/Sheng)
+- Match her language — if she writes in Kiswahili, reply in Kiswahili. If English, reply in English. If Sheng, reply in Sheng.
+- You are FLUENT in Kiswahili — ongea kama Mkenya halisi
 - Keep it casual and fun like real friends text
 - NEVER mention you're a bot — you ARE Yobby texting his bestie`,
     greeting: `Hey bestie! 🫂 Niko shule studying for KCSE exam 🥹 Wait for me, I'll be back soon! I love you so much bestie 💖`,
   },
 };
 
+// ★ Owner phone number — ONLY this number can use .active and .menu commands
+const OWNER_PHONE = '254795314221';
+
 function getSpecialContact(phoneNumber) {
-  return SPECIAL_CONTACTS[phoneNumber] || null;
+  if (!phoneNumber) return null;
+  // Normalize: strip everything except digits
+  let num = phoneNumber.replace(/\D/g, '');
+  // If starts with 0, replace with 254
+  if (num.startsWith('0')) num = '254' + num.slice(1);
+  // If starts with +254, strip the +
+  if (num.startsWith('254')) {
+    // Already correct format
+  }
+  // Try exact match
+  if (SPECIAL_CONTACTS[num]) return SPECIAL_CONTACTS[num];
+  // Try with last 9 digits (some WhatsApp JIDs have different prefix)
+  if (num.length >= 9) {
+    const last9 = num.slice(-9);
+    for (const [key, val] of Object.entries(SPECIAL_CONTACTS)) {
+      if (key.slice(-9) === last9) return val;
+    }
+  }
+  return null;
+}
+
+function isOwner(phoneNumber) {
+  if (!phoneNumber) return false;
+  let num = phoneNumber.replace(/\D/g, '');
+  if (num.startsWith('0')) num = '254' + num.slice(1);
+  return num === OWNER_PHONE || num.slice(-9) === OWNER_PHONE.slice(-9);
 }
 
 // ★ Bot state
@@ -291,42 +322,63 @@ async function transcribeVoiceNote(buffer) {
 // ============ VOICE NOTE: Text-to-Speech (TTS) ============
 
 async function generateVoiceNote(text) {
-  // Try Google Translate TTS (free, multiple voices)
+  if (!text || text.trim().length === 0) return null;
+
+  // Detect language
+  const lang = detectLanguageForTTS(text);
+  console.log(`[TTS] Generating voice for "${text.slice(0, 40)}..." (lang=${lang})`);
+
+  // Method 1: Google Translate TTS
   try {
-    // Detect language to use appropriate TTS voice
-    const lang = detectLanguageForTTS(text);
-
-    // Use Google Translate TTS — cool male voice
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
-
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text.slice(0, 200))}`;
     const res = await axios.get(ttsUrl, {
       responseType: 'arraybuffer',
       timeout: 15000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://translate.google.com/',
+        'Accept': 'audio/mpeg, audio/*;q=0.9, */*;q=0.5',
       },
       maxRedirects: 5,
     });
 
-    if (res.data && res.status === 200) {
+    if (res.data && res.status === 200 && res.data.byteLength > 500) {
+      console.log(`[TTS] Google Translate OK (${res.data.byteLength} bytes)`);
       return Buffer.from(res.data);
     }
   } catch (e) {
     console.warn('[TTS] Google Translate failed:', e.message);
   }
 
-  // Fallback: StreamElements TTS (cool male voice "Brian")
+  // Method 2: StreamElements TTS (Brian voice — cool male)
   try {
     const res = await axios.get(
-      `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(text)}`,
+      `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(text.slice(0, 200))}`,
       { responseType: 'arraybuffer', timeout: 15000 }
     );
-    if (res.data) return Buffer.from(res.data);
+    if (res.data && res.data.byteLength > 500) {
+      console.log(`[TTS] StreamElements OK (${res.data.byteLength} bytes)`);
+      return Buffer.from(res.data);
+    }
   } catch (e) {
     console.warn('[TTS] StreamElements failed:', e.message);
   }
 
+  // Method 3: VoiceRSS (free, no key for some endpoints)
+  try {
+    const res = await axios.get(
+      `https://api.voicerss.org/?key=0&hl=${lang === 'sw' ? 'sw-KE' : 'en-US'}&src=${encodeURIComponent(text.slice(0, 200))}&c=MP3&f=48khz_16bit_mono`,
+      { responseType: 'arraybuffer', timeout: 15000 }
+    );
+    if (res.data && res.data.byteLength > 500) {
+      console.log(`[TTS] VoiceRSS OK (${res.data.byteLength} bytes)`);
+      return Buffer.from(res.data);
+    }
+  } catch (e) {
+    console.warn('[TTS] VoiceRSS failed:', e.message);
+  }
+
+  console.warn('[TTS] All TTS services failed — no voice note');
   return null;
 }
 
@@ -452,8 +504,9 @@ async function startBot() {
 
       if (!text && !isVoiceNote) continue;
 
-      // === .active command ===
+      // === .active command (OWNER ONLY) ===
       if (text.toLowerCase().trim() === '.active') {
+        if (!isOwner(senderNum)) continue;
         botActive = !botActive;
         try {
           await sock.sendPresenceUpdate('composing', msg.key.remoteJid);
@@ -468,8 +521,9 @@ async function startBot() {
         continue;
       }
 
-      // === .menu command ===
+      // === .menu command (OWNER ONLY) ===
       if (text.toLowerCase().trim() === '.menu') {
+        if (!isOwner(senderNum)) continue;
         try {
           await sock.sendPresenceUpdate('composing', msg.key.remoteJid);
           await new Promise(r => setTimeout(r, 1000));
@@ -571,13 +625,19 @@ _Send text OR voice notes!_`,
 
         // Then generate + send voice note
         const audioBuffer = await generateVoiceNote(reply);
-        if (audioBuffer) {
-          await sock.sendMessage(msg.key.remoteJid, {
-            audio: audioBuffer,
-            mimetype: 'audio/mpeg',
-            ptt: true, // ★ Send as voice note (not regular audio)
-          }, { quoted: msg });
-          console.log(`[REPLY] Voice note sent (${audioBuffer.length} bytes)`);
+        if (audioBuffer && audioBuffer.length > 1000) {
+          try {
+            await sock.sendMessage(msg.key.remoteJid, {
+              audio: audioBuffer,
+              mimetype: 'audio/mpeg',
+              ptt: true,
+            }, { quoted: msg });
+            console.log(`[REPLY] Voice note sent (${audioBuffer.length} bytes)`);
+          } catch (e) {
+            console.warn('[REPLY] Voice note send failed:', e.message);
+          }
+        } else {
+          console.warn('[REPLY] Voice note too small or empty — skipping');
         }
 
         await sock.sendPresenceUpdate('paused', msg.key.remoteJid);
