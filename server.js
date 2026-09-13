@@ -605,15 +605,28 @@ _Bot is always active — no need to activate!_`,
         // ★ Check if this is a special contact
         const special = getSpecialContact(senderNum);
 
-        // ★ First message from a special contact → send their custom greeting
-        if (special && (conversations.get(senderNum) || []).length === 0) {
-          const delay2 = 1500;
-          await new Promise(r => setTimeout(r, delay2));
-          await sock.sendMessage(msg.key.remoteJid, { text: special.greeting }, { quoted: msg });
-          console.log(`[GREETING] Sent special greeting to ${special.name}`);
+        // ★ ★ ★ GREETING SYSTEM ★ ★ ★
+        // Every person gets a greeting on their FIRST message, then AI takes over.
+        const isFirstMessage = (conversations.get(senderNum) || []).length === 0;
 
-          // Also send voice note of the greeting
-          const greetAudio = await generateVoiceNote(special.greeting);
+        if (isFirstMessage) {
+          // Determine which greeting to send
+          let greeting;
+          if (special) {
+            greeting = special.greeting;
+            console.log(`[GREETING] Sending special greeting to ${special.name}`);
+          } else {
+            // Default greeting for everyone else
+            greeting = `Hey! Yobby isn't here 😊 Yobby is at school waiting for KCSE exam. Wish him success 🥹 Who are you?`;
+            console.log(`[GREETING] Sending default greeting to ${senderName}`);
+          }
+
+          // Send greeting text
+          await new Promise(r => setTimeout(r, 1500));
+          await sock.sendMessage(msg.key.remoteJid, { text: greeting }, { quoted: msg });
+
+          // Send greeting voice note
+          const greetAudio = await generateVoiceNote(greeting);
           if (greetAudio && greetAudio.length > 2000) {
             try {
               const tempPath2 = path.join(__dirname, 'temp_greet.mp3');
@@ -631,13 +644,18 @@ _Bot is always active — no need to activate!_`,
             }
           }
 
+          // Save to conversation history so AI has context
           addToConversation(senderNum, 'user', text);
-          addToConversation(senderNum, 'assistant', special.greeting);
+          addToConversation(senderNum, 'assistant', greeting);
+
+          // ★ AI MODE IS NOW ON — next message from this person will get AI reply
+          console.log(`[AI MODE] Now ON for ${senderName} — will vibe like ChatGPT`);
           await sock.sendPresenceUpdate('paused', msg.key.remoteJid);
           continue;
         }
 
-        // ★ Generate AI reply (with special prompt if applicable)
+        // ★ ★ ★ AI MODE — vibe like ChatGPT ★ ★ ★
+        // After greeting, AI takes over and has natural conversation
         const history = conversations.get(senderNum) || [];
         const reply = await generateAIReply(senderName, text, history, senderNum);
 
