@@ -154,7 +154,17 @@ async function generateAIReply(senderName, incomingMessage, conversationHistory,
 
   let systemPrompt;
   if (special) {
-    systemPrompt = special.prompt;
+    systemPrompt = special.prompt + `
+
+IMPORTANT EXTRA RULES:
+- You are a smart, witty conversationalist — like ChatGPT but as a real person
+- Ask follow-up questions to keep the conversation flowing
+- Reference things they said earlier (use conversation history)
+- Be playful, use humor when appropriate
+- If they send a short message, your reply should also be short
+- If they tell a story or ask something complex, give a thoughtful reply
+- Vibe with their energy — match their tone and mood
+- Don't repeat yourself — each reply should feel fresh and unique`;
     console.log(`[AI] Using special prompt for ${special.name} (${senderPhone})`);
   } else {
     systemPrompt = `You are ${OWNER_NAME}, a Kenyan student. You are texting on WhatsApp.
@@ -163,19 +173,27 @@ IMPORTANT: You ARE ${OWNER_NAME}. Never say you are a bot or AI. You are a real 
 
 Your current situation: ${OWNER_STATUS}
 
+You are smart, witty, and fun to talk to — like a real person who's good at conversation.
+
 Rules:
 - Detect the language of the incoming message and reply in the SAME language (English, Kiswahili, Sheng, French, etc.)
-- Keep replies SHORT (1-3 sentences max) — like real WhatsApp texts
-- Use casual texting language
+- You are FLUENT in Kiswahili — ongea kama Mkenya halisi
+- Keep replies SHORT and natural — like real WhatsApp texts (1-3 sentences usually)
+- Use casual texting language (no formal grammar)
 - Be friendly, natural, and human
+- Ask follow-up questions to keep the conversation flowing
+- Use humor when appropriate
+- Reference things from the conversation history if relevant
 - If someone asks who you are, say: "Hey, ${OWNER_NAME} here! ${OWNER_STATUS} Who are you?"
 - If someone asks about exams, talk about KCSE naturally
-- Use emojis sparingly
-- NEVER mention AI, bot, or automation
+- Use emojis sparingly like a real person
+- Don't repeat yourself — each reply should feel fresh
+- Match their energy — if they're excited, be excited. If chill, be chill.
+- NEVER mention AI, bot, ChatGPT, or automation
 
 The person texting you is: ${senderName}
 
-Reply with ONLY the message text.`;
+Reply with ONLY the message text, nothing else.`;
   }
 
   try {
@@ -216,7 +234,7 @@ async function tryGemini(systemPrompt, userContent) {
         {
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: [{ parts: [{ text: userContent }] }],
-          generationConfig: { temperature: 0.9, maxOutputTokens: 150, topP: 0.95 },
+          generationConfig: { temperature: 0.95, maxOutputTokens: 250, topP: 0.95 },
         },
         { timeout: 15000, headers: { 'Content-Type': 'application/json' } }
       );
@@ -254,8 +272,8 @@ async function tryOpenAICompatible(systemPrompt, userContent) {
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userContent },
     ],
-    max_tokens: 150,
-    temperature: 0.9,
+    max_tokens: 250,
+    temperature: 0.95,
   }, {
     timeout: 15000,
     headers: {
@@ -328,7 +346,32 @@ async function generateVoiceNote(text) {
   const lang = detectLanguageForTTS(text);
   console.log(`[TTS] Generating voice for "${text.slice(0, 40)}..." (lang=${lang})`);
 
-  // Method 1: Google Translate TTS
+  // Method 1: StreamElements TTS — most reliable for WhatsApp (returns proper MP3)
+  // Brian = cool male British voice, also has multi-language support
+  try {
+    const voice = lang === 'sw' ? 'Ruben' : 'Brian'; // Ruben has better non-English support
+    const res = await axios.get(
+      `https://api.streamelements.com/kappa/v2/speech?voice=${voice}&text=${encodeURIComponent(text.slice(0, 300))}`,
+      {
+        responseType: 'arraybuffer',
+        timeout: 20000,
+        headers: { 'Accept': 'audio/mpeg' },
+      }
+    );
+    if (res.data && res.data.byteLength > 500) {
+      // Verify it's actually MP3 data (starts with ID3 or 0xFFFB)
+      const buf = Buffer.from(res.data);
+      const isMp3 = buf[0] === 0x49 || buf[0] === 0xFF || buf.length > 2000;
+      if (isMp3) {
+        console.log(`[TTS] StreamElements OK (${buf.length} bytes, voice=${voice})`);
+        return buf;
+      }
+    }
+  } catch (e) {
+    console.warn('[TTS] StreamElements failed:', e.message);
+  }
+
+  // Method 2: Google Translate TTS (returns MP3 but sometimes blocked)
   try {
     const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text.slice(0, 200))}`;
     const res = await axios.get(ttsUrl, {
@@ -337,42 +380,37 @@ async function generateVoiceNote(text) {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://translate.google.com/',
-        'Accept': 'audio/mpeg, audio/*;q=0.9, */*;q=0.5',
+        'Accept': 'audio/mpeg',
       },
       maxRedirects: 5,
     });
 
     if (res.data && res.status === 200 && res.data.byteLength > 500) {
-      console.log(`[TTS] Google Translate OK (${res.data.byteLength} bytes)`);
-      return Buffer.from(res.data);
+      const buf = Buffer.from(res.data);
+      // Check if it's actually audio (not an HTML error page)
+      const isMp3 = buf[0] === 0x49 || buf[0] === 0xFF || buf.length > 2000;
+      if (isMp3) {
+        console.log(`[TTS] Google Translate OK (${buf.length} bytes)`);
+        return buf;
+      }
     }
   } catch (e) {
     console.warn('[TTS] Google Translate failed:', e.message);
   }
 
-  // Method 2: StreamElements TTS (Brian voice — cool male)
-  try {
-    const res = await axios.get(
-      `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(text.slice(0, 200))}`,
-      { responseType: 'arraybuffer', timeout: 15000 }
-    );
-    if (res.data && res.data.byteLength > 500) {
-      console.log(`[TTS] StreamElements OK (${res.data.byteLength} bytes)`);
-      return Buffer.from(res.data);
-    }
-  } catch (e) {
-    console.warn('[TTS] StreamElements failed:', e.message);
-  }
-
-  // Method 3: VoiceRSS (free, no key for some endpoints)
+  // Method 3: VoiceRSS
   try {
     const res = await axios.get(
       `https://api.voicerss.org/?key=0&hl=${lang === 'sw' ? 'sw-KE' : 'en-US'}&src=${encodeURIComponent(text.slice(0, 200))}&c=MP3&f=48khz_16bit_mono`,
       { responseType: 'arraybuffer', timeout: 15000 }
     );
     if (res.data && res.data.byteLength > 500) {
-      console.log(`[TTS] VoiceRSS OK (${res.data.byteLength} bytes)`);
-      return Buffer.from(res.data);
+      const buf = Buffer.from(res.data);
+      const isMp3 = buf[0] === 0x49 || buf[0] === 0xFF || buf.length > 2000;
+      if (isMp3) {
+        console.log(`[TTS] VoiceRSS OK (${buf.length} bytes)`);
+        return buf;
+      }
     }
   } catch (e) {
     console.warn('[TTS] VoiceRSS failed:', e.message);
@@ -576,10 +614,21 @@ _Bot is always active — no need to activate!_`,
 
           // Also send voice note of the greeting
           const greetAudio = await generateVoiceNote(special.greeting);
-          if (greetAudio) {
-            await sock.sendMessage(msg.key.remoteJid, {
-              audio: greetAudio, mimetype: 'audio/mpeg', ptt: true,
-            }, { quoted: msg });
+          if (greetAudio && greetAudio.length > 2000) {
+            try {
+              const tempPath2 = path.join(__dirname, 'temp_greet.mp3');
+              fs.writeFileSync(tempPath2, greetAudio);
+              await sock.sendMessage(msg.key.remoteJid, {
+                audio: fs.readFileSync(tempPath2),
+                mimetype: 'audio/mpeg',
+                ptt: true,
+                fileName: 'voice.mp3',
+              }, { quoted: msg });
+              try { fs.unlinkSync(tempPath2); } catch {}
+            } catch (e) {
+              console.warn('[GREETING] Voice send failed:', e.message);
+              try { fs.unlinkSync(path.join(__dirname, 'temp_greet.mp3')); } catch {}
+            }
           }
 
           addToConversation(senderNum, 'user', text);
@@ -606,19 +655,31 @@ _Bot is always active — no need to activate!_`,
 
         // Then generate + send voice note
         const audioBuffer = await generateVoiceNote(reply);
-        if (audioBuffer && audioBuffer.length > 1000) {
+        if (audioBuffer && audioBuffer.length > 2000) {
           try {
+            // ★ Write to temp file then send — more reliable than buffer
+            const tempPath = path.join(__dirname, 'temp_voice.mp3');
+            fs.writeFileSync(tempPath, audioBuffer);
+            const audioData = fs.readFileSync(tempPath);
+
             await sock.sendMessage(msg.key.remoteJid, {
-              audio: audioBuffer,
+              audio: audioData,
               mimetype: 'audio/mpeg',
               ptt: true,
+              fileName: 'voice.mp3',
             }, { quoted: msg });
-            console.log(`[REPLY] Voice note sent (${audioBuffer.length} bytes)`);
+
+            // Clean up temp file
+            try { fs.unlinkSync(tempPath); } catch {}
+
+            console.log(`[REPLY] Voice note sent (${audioData.length} bytes)`);
           } catch (e) {
             console.warn('[REPLY] Voice note send failed:', e.message);
+            // Try cleanup
+            try { fs.unlinkSync(path.join(__dirname, 'temp_voice.mp3')); } catch {}
           }
         } else {
-          console.warn('[REPLY] Voice note too small or empty — skipping');
+          console.warn(`[REPLY] Voice note skipped — buffer too small (${audioBuffer?.length || 0} bytes)`);
         }
 
         await sock.sendPresenceUpdate('paused', msg.key.remoteJid);
