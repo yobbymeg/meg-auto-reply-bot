@@ -1,0 +1,22 @@
+{
+  "name": "meg-auto-reply-bot",
+  "version": "1.0.0",
+  "description": "MEG Auto-Reply Bot — WhatsApp AI bot that replies like you (Gemini AI, multi-language)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "@whiskeysockets/baileys": "^6.6.0",
+    "pino": "^9.3.2",
+    "axios": "^1.7.2",
+    "qrcode": "^1.5.4"
+  }
+}

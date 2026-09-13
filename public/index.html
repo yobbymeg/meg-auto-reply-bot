@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>MEG AUTO-REPLY BOT</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Inter',system-ui,sans-serif;background:#050208;color:#fff;min-height:100vh;overflow-x:hidden}
+.bg{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(800px 400px at 50% 0%,rgba(0,217,166,0.12),transparent 60%),radial-gradient(600px 400px at 50% 100%,rgba(245,197,66,0.08),transparent 60%),#050208}
+.orb{position:fixed;border-radius:50%;filter:blur(80px);z-index:0;pointer-events:none}
+.o1{width:300px;height:300px;top:-80px;left:-60px;background:rgba(0,217,166,0.15);animation:f1 14s ease-in-out infinite}
+.o2{width:200px;height:200px;bottom:-40px;right:-40px;background:rgba(245,197,66,0.1);animation:f2 18s ease-in-out infinite}
+@keyframes f1{0%,100%{transform:translate(0,0)scale(1)}50%{transform:translate(40px,60px)scale(1.1)}}
+@keyframes f2{0%,100%{transform:translate(0,0)scale(1)}50%{transform:translate(-50px,-30px)scale(0.9)}}
+.wrap{position:relative;z-index:1;max-width:440px;margin:0 auto;padding:24px 20px;min-height:100vh;display:flex;flex-direction:column;justify-content:center}
+.hdr{text-align:center;margin-bottom:32px}
+.logo{font-size:56px;margin-bottom:8px}
+.title{font-size:28px;font-weight:900;letter-spacing:1px;background:linear-gradient(135deg,#00D9A6,#F5C542);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px}
+.sub{color:#8696A0;font-size:13px;letter-spacing:2px;text-transform:uppercase}
+.badges{display:flex;gap:6px;justify-content:center;margin-bottom:24px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:rgba(15,15,18,0.7);border:1px solid rgba(0,217,166,0.15);border-radius:999px;font-size:11px;font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;animation:blink 2s infinite}
+.dot.on{background:#25D366;box-shadow:0 0 8px #25D366}
+.dot.off{background:#444}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.card{background:rgba(12,12,16,0.65);backdrop-filter:blur(20px);border:1px solid rgba(0,217,166,0.1);border-radius:20px;padding:22px;margin-bottom:12px}
+.lbl{display:block;font-size:10px;font-weight:800;color:#F5C542;margin-bottom:7px;text-transform:uppercase;letter-spacing:2px}
+.inp{width:100%;padding:15px;background:rgba(20,20,25,0.8);border:1px solid rgba(0,217,166,0.1);border-radius:14px;color:#fff;font-size:17px;font-weight:600;outline:none;transition:all .3s}
+.inp:focus{border-color:#00D9A6;box-shadow:0 0 0 4px rgba(0,217,166,0.08)}
+.inp::placeholder{color:#333;font-weight:400}
+.ht{font-size:10px;color:#444;margin-top:5px}
+.btn{width:100%;padding:15px;border:none;border-radius:14px;background:linear-gradient(135deg,#00D9A6,#00A884);color:#000;font-size:14px;font-weight:900;cursor:pointer;text-transform:uppercase;letter-spacing:2px;box-shadow:0 4px 20px rgba(0,217,166,0.25);transition:all .3s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,217,166,0.35)}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.btn-red{background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 4px 20px rgba(239,68,68,0.2)}
+.btn-gold{background:linear-gradient(135deg,#F5C542,#B8901E);color:#000}
+.code-box{text-align:center;padding:26px 18px;background:linear-gradient(135deg,rgba(0,217,166,0.1),rgba(0,217,166,0.02));border:2px dashed #00D9A6;border-radius:16px;margin:12px 0}
+.code{font-size:38px;font-weight:900;letter-spacing:4px;color:#00D9A6;font-family:'Courier New',monospace}
+.tm{font-size:10px;color:#444}
+.steps{list-style:none;padding:0;margin:12px 0;counter-reset:s}
+.steps li{padding:7px 0 7px 32px;position:relative;color:#8696A0;font-size:12px;counter-increment:s}
+.steps li::before{content:counter(s);position:absolute;left:0;top:5px;width:22px;height:22px;background:linear-gradient(135deg,#00D9A6,#00A884);color:#000;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}
+.err{background:rgba(239,68,68,0.08);border:1px solid #ef4444;color:#ef4444;padding:10px 13px;border-radius:10px;font-size:12px;margin-bottom:12px;display:none}
+.err.show{display:block}
+.spin{width:15px;height:15px;border:2px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.feat{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:12px}
+.ft{background:rgba(20,20,25,0.8);padding:12px 8px;border-radius:10px;text-align:center;border:1px solid rgba(0,217,166,0.05);font-size:10px;color:#8696A0}
+.fti{font-size:20px;display:block;margin-bottom:4px}
+.foot{text-align:center;color:#444;font-size:10px;margin-top:18px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(80px);background:rgba(20,8,12,0.95);border:1px solid rgba(0,217,166,0.2);color:#fff;padding:11px 18px;border-radius:11px;font-size:12px;font-weight:700;z-index:99;opacity:0;transition:all .35s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.copy{width:100%;background:rgba(20,20,25,0.8);border:1px solid rgba(0,217,166,0.1);color:#fff;padding:10px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer}
+.foot a{color:#00D9A6;text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="orb o1"></div><div class="orb o2"></div>
+
+<div class="wrap">
+<div class="hdr">
+<div class="logo">🤖</div>
+<h1 class="title">MEG AUTO-REPLY</h1>
+<p class="sub">★ AI WhatsApp Bot ★</p>
+</div>
+
+<div class="badges">
+<div class="badge"><span class="dot off" id="dot"></span><span id="st">Checking...</span></div>
+<div class="badge">🤖 Gemini AI</div>
+<div class="badge">🌐 Multi-language</div>
+</div>
+
+<div class="err" id="er"></div>
+
+<div class="card" id="fc">
+<span class="lbl">📱 PHONE NUMBER</span>
+<input type="tel" id="ph" class="inp" placeholder="254712345678" inputmode="numeric">
+<p class="ht">With country code. No + or spaces.</p>
+<div style="height:12px"></div>
+<button class="btn" id="bt" onclick="go()">🔗 GET PAIRING CODE</button>
+</div>
+
+<div class="card" id="cc" style="display:none">
+<h3 style="font-size:16px;margin-bottom:5px">✅ Code Generated!</h3>
+<p style="color:#8696A0;font-size:11px;margin-bottom:10px">Enter this in WhatsApp to link.</p>
+<div class="code-box"><div class="code" id="cd">XXXX</div><div class="tm" id="tm">Expires in 90s</div></div>
+<button class="copy" onclick="cp()">📋 Copy Code</button>
+<h4 style="margin-top:16px;font-size:12px;margin-bottom:5px">How to link:</h4>
+<ol class="steps">
+<li>Open WhatsApp on your phone</li>
+<li>Settings → Linked Devices → Link a Device</li>
+<li>Tap "Link with phone number instead"</li>
+<li>Enter the code above</li>
+</ol>
+</div>
+
+<div class="card" id="nc" style="display:none">
+<div style="text-align:center">
+<div style="font-size:42px">✅</div>
+<h3 style="margin:8px 0;font-size:16px">Bot Connected!</h3>
+<div id="ni" style="font-size:11px;color:#8696A0;margin-bottom:14px;line-height:1.5"></div>
+<p style="color:#8696A0;font-size:10px;margin-bottom:12px">Send <code style="background:rgba(20,25,0.8);padding:2px 5px;border-radius:4px;color:#00D9A6">.active</code> in WhatsApp to start the bot.</p>
+<button class="btn btn-gold" id="activateBtn" onclick="activate()">🟢 ACTIVATE BOT NOW</button>
+</div>
+</div>
+
+<div class="card">
+<h4 style="font-size:12px;margin-bottom:8px;text-align:center">⚡ FEATURES</h4>
+<div class="feat">
+<div class="ft"><span class="fti">🤖</span>Gemini AI</div>
+<div class="ft"><span class="fti">🌐</span>Multi-language</div>
+<div class="ft"><span class="fti">✍️</span>Typing indicator</div>
+<div class="ft"><span class="fti">💬</span>Human-like reply</div>
+<div class="ft"><span class="fti">🟢</span>24/7 Online</div>
+<div class="ft"><span class="fti">📱</span>Chrome browser</div>
+</div>
+</div>
+
+<div class="foot"><p>⚡ MEG AUTO-REPLY BOT v1.0</p><p><a href="https://github.com/yobbymeg/meg-auto-reply-bot" target="_blank">GitHub</a></p></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+async function chk(){try{const r=await fetch('/api/status');const d=await r.json();if(d.connected){document.getElementById('dot').className='dot on';document.getElementById('st').textContent=d.active?'🟢 Bot Active':'✅ Connected';document.getElementById('fc').style.display='none';document.getElementById('cc').style.display='none';document.getElementById('nc').style.display='block';document.getElementById('ni').innerHTML='📱 '+d.number+(d.name?'<br>👤 '+d.name:'')+(d.active?'<br>🟢 Bot ACTIVE':'<br>🔴 Bot OFF');const ab=document.getElementById('activateBtn');if(d.active){ab.textContent='🔴 DEACTIVATE BOT';ab.className='btn btn-red';ab.onclick=deactivate}else{ab.textContent='🟢 ACTIVATE BOT NOW';ab.className='btn btn-gold';ab.onclick=activate}}else{document.getElementById('dot').className='dot off';document.getElementById('st').textContent='Not connected'}}catch{document.getElementById('dot').className='dot off';document.getElementById('st').textContent='Offline'}}
+
+async function go(){const ph=document.getElementById('ph').value.replace(/\D/g,'');const er=document.getElementById('er');er.classList.remove('show');if(!ph||ph.length<8){er.textContent='❌ Enter valid phone with country code';er.classList.add('show');return}const bt=document.getElementById('bt');bt.disabled=true;bt.innerHTML='<span class="spin"></span> Generating...';try{const r=await fetch('/api/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneNumber:ph})});const d=await r.json();if(!r.ok)throw new Error(d.error);document.getElementById('fc').style.display='none';document.getElementById('cc').style.display='block';document.getElementById('cd').textContent=d.code;let t=d.expiresIn;const tm=document.getElementById('tm');const iv=setInterval(()=>{t--;if(t<=0){clearInterval(iv);tm.textContent='Expired';document.getElementById('cc').style.display='none';document.getElementById('fc').style.display='block';bt.disabled=false;bt.innerHTML='🔗 GET PAIRING CODE'}else{tm.textContent='Expires in '+t+'s'}},1000);const pi=setInterval(async()=>{try{const sr=await fetch('/api/status');const sd=await sr.json();if(sd.connected){clearInterval(pi);chk()}}catch{}},2000)}catch(e){er.textContent='❌ '+e.message;er.classList.add('show');bt.disabled=false;bt.innerHTML='🔗 GET PAIRING CODE'}}
+
+function cp(){const c=document.getElementById('cd').textContent;navigator.clipboard.writeText(c);showToast('📋 Copied: '+c)}
+function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000)}
+
+async function activate(){try{const r=await fetch('/api/activate',{method:'POST'});const d=await r.json();if(d.ok){showToast('🟢 Bot activated!');chk()}}catch(e){showToast('❌ Failed')}}
+async function deactivate(){try{const r=await fetch('/api/deactivate',{method:'POST'});const d=await r.json();if(d.ok){showToast('🔴 Bot deactivated');chk()}}catch(e){showToast('❌ Failed')}}
+
+chk();setInterval(chk,3000);
+</script>
+</body>
+</html>
