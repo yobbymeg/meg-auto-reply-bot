@@ -197,31 +197,66 @@ Reply with ONLY the message text, nothing else.`;
   }
 
   try {
-    if (!AI_API_KEY) {
-      return localFallbackReply(incomingMessage, senderName);
-    }
-
+    // Build conversation context
     const userContent = conversationHistory.length > 0
       ? conversationHistory.map(m => `${m.role === 'user' ? 'Them' : 'Me'}: ${m.content}`).join('\n') + `\nThem: ${incomingMessage}\nMe:`
       : `Them: ${incomingMessage}\nMe:`;
 
-    // === Try the configured AI provider ===
+    // === Try AI providers in order ===
     let reply = null;
 
-    if (AI_PROVIDER === 'gemini') {
-      reply = await tryGemini(systemPrompt, userContent);
-    } else if (AI_PROVIDER === 'openai' || AI_PROVIDER === 'groq' || AI_PROVIDER === 'deepseek' || AI_PROVIDER === 'mistral') {
-      reply = await tryOpenAICompatible(systemPrompt, userContent);
+    // 1. Try configured provider (Groq/OpenAI/DeepSeek/Mistral)
+    if (AI_API_KEY) {
+      if (AI_PROVIDER === 'gemini') {
+        reply = await tryGemini(systemPrompt, userContent);
+      } else if (AI_PROVIDER === 'openai' || AI_PROVIDER === 'groq' || AI_PROVIDER === 'deepseek' || AI_PROVIDER === 'mistral') {
+        reply = await tryOpenAICompatible(systemPrompt, userContent);
+      }
+      if (reply) console.log('[AI] Used', AI_PROVIDER);
     }
 
-    if (reply && reply.trim().length > 0) {
-      return reply.trim().slice(0, 500);
+    // 2. If configured provider failed → try Pollinations (FREE, no key needed)
+    if (!reply) {
+      reply = await tryPollinations(systemPrompt, userContent);
+      if (reply) console.log('[AI] Used Pollinations (free)');
     }
 
-    return localFallbackReply(incomingMessage, senderName);
+    // 3. If all AI failed → local fallback
+    if (!reply) {
+      console.log('[AI] All AI failed — using local fallback');
+      reply = localFallbackReply(incomingMessage, senderName);
+    }
+
+    return reply.slice(0, 500);
   } catch (e) {
     console.warn('[AI] Failed:', e.message);
     return localFallbackReply(incomingMessage, senderName);
+  }
+}
+
+// ★ Pollinations.ai — FREE, no API key needed
+async function tryPollinations(systemPrompt, userContent) {
+  try {
+    // Combine system prompt + user content into one message
+    const fullPrompt = `${systemPrompt}\n\n${userContent}\n\nReply with ONLY the message text:`;
+
+    const res = await axios.get(
+      `https://text.pollinations.ai/${encodeURIComponent(fullPrompt)}?model=openai`,
+      { timeout: 20000, headers: { 'User-Agent': 'MegBot/1.0' } }
+    );
+
+    if (typeof res.data === 'string' && res.data.trim().length > 0) {
+      let reply = res.data.trim();
+      // Clean up common AI artifacts
+      reply = reply.replace(/^(Me:|Reply:|Response:)\s*/i, '').replace(/^["']|["']$/g, '');
+      if (reply.length > 0 && reply.length < 500) {
+        return reply;
+      }
+    }
+    return null;
+  } catch (e) {
+    console.warn('[AI] Pollinations failed:', e.message);
+    return null;
   }
 }
 
